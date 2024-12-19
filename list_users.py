@@ -93,7 +93,7 @@ while hasNextPage:
         else:
             members_roles["email"].append(None)
         if organizational_roles:
-            members_roles["organizational_roles"].append(organizational_roles)
+            members_roles["organizational_roles"].append(','.join(organizational_roles))
         else:
             members_roles["organizational_roles"].append(None)
 
