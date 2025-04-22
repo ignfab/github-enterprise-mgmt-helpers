@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import requests
-import csv
 import sys
-import pandas as pd
-import numpy as np
-import json
-import time
 from urllib3.util import Retry
 from requests import Session
 from requests.adapters import HTTPAdapter
