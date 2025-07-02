@@ -15,6 +15,7 @@ url = 'https://api.github.com/graphql'
 # GitHub API token must have read:enterprise or admin:enterprise scope and user must be enterprise owner
 api_token = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 headers = {'Authorization': 'bearer %s' % api_token}
+entreprise_slug = "your-entreprise-slug"
 
 ##################################################################
 # First get list of users that are organization member or owners #
@@ -30,36 +31,37 @@ members_roles = { "login":[],
 # GraphQL query for listing enterprise members and their status in enterprise organizations
 # Query explanation : get enterprises members as Union and get details using the EnterpriseUserAccount
 # Warning : enterprise organizations will not be paginated. We assume the enterprise has less than 100 organizations
-members_query = { 'query' : '''
-query {
-  enterprise(slug: "your-enterprise-slug") {
-    members(first:100, after: null) {
-      nodes {
-        ... on EnterpriseUserAccount{
-          organizations(first:100) {
-            nodes{
+
+members_query = { 'query' : f'''
+query {{
+  enterprise(slug: "{entreprise_slug}") {{
+    members(first:100, after: null) {{
+      nodes {{
+        ... on EnterpriseUserAccount{{
+          organizations(first:100) {{
+            nodes{{
               login
-            }
-            edges {
+            }}
+            edges {{
               role
-            }
-          }
-          user {
+            }}
+          }}
+          user {{
             login
             name
             email
-          }
-        }
-      }
-      pageInfo {
+          }}
+        }}
+      }}
+      pageInfo {{
         endCursor
         startCursor
         hasNextPage
         hasPreviousPage        
-      }
-    }
-  }
-}
+      }}
+    }}
+  }}
+}}
 '''}
 
 # variables used for pagination
@@ -101,7 +103,6 @@ while hasNextPage:
 with open('members_roles.json', 'w', encoding='utf8') as f:
     json.dump(members_roles, f, ensure_ascii=False)
 
-
 ############################################################
 # Then get list of GitHub Enterprise outside collaborators #
 ############################################################
@@ -117,39 +118,39 @@ oc_info = { "login":[],
 
 # GraphQL query for listing enterprise outside collaborators and the repositories they are members of
 # Query explanation : Using the ownerInfo object get list of outside collaborators then for each get list of repositories they are member of
-oc_query = { 'query' : '''
-query {
-  enterprise(slug: "your-enterprise-slug") {
-    ownerInfo {
-      outsideCollaborators(first:100 after: null) {
+oc_query = { 'query' : f'''
+query {{
+  enterprise(slug: "{entreprise_slug}") {{
+    ownerInfo {{
+      outsideCollaborators(first:100 after: null) {{
         totalCount
-        edges {
-          repositories(first:100) {
-            nodes{
+        edges {{
+          repositories(first:100) {{
+            nodes{{
               nameWithOwner
-            }
-            edges {
-              node{
+            }}
+            edges {{
+              node{{
                 isPrivate
-              }
-            }
-          }
-          node {
+              }}
+            }}
+          }}
+          node {{
             login
             name
             email
-          }
-        }
-        pageInfo {
+          }}
+        }}
+        pageInfo {{
           endCursor
           startCursor
           hasNextPage
           hasPreviousPage        
-        }
-      }
-    }
-  }
-}
+        }}
+      }}
+    }}
+  }}
+}}
 ''' }
 
 # variables used for pagination
