@@ -21,7 +21,7 @@ entreprise_slug = "your-entreprise-slug"
 # First get list of users that are organization member or owners #
 ##################################################################
 
-# Dictionnary to store information about members
+# Dictionnary to store information about members or owners
 # organizational_roles will contain membership and/or ownership
 members_roles = { "login":[],
                   "name": [],
@@ -32,49 +32,52 @@ members_roles = { "login":[],
 # Query explanation : get enterprises members as Union and get details using the EnterpriseUserAccount
 # Warning : enterprise organizations will not be paginated. We assume the enterprise has less than 100 organizations
 
-members_query = { 'query' : f'''
-query {{
-  enterprise(slug: "{entreprise_slug}") {{
-    members(first:100, after: null) {{
-      nodes {{
-        ... on EnterpriseUserAccount{{
-          organizations(first:100) {{
-            nodes{{
+members_query = { 'query' : '''
+query($enterpriseSlug: String!, $afterCursor: String) {
+  enterprise(slug: $enterpriseSlug) {
+    members(first:100, after: $afterCursor) {
+      nodes {
+        ... on EnterpriseUserAccount{
+          organizations(first:100) {
+            nodes{
               login
-            }}
-            edges {{
+            }
+            edges {
               role
-            }}
-          }}
-          user {{
+            }
+          }
+          user {
             login
             name
             email
-          }}
-        }}
-      }}
-      pageInfo {{
+          }
+        }
+      }
+      pageInfo {
         endCursor
         startCursor
         hasNextPage
         hasPreviousPage        
-      }}
-    }}
-  }}
-}}
-'''}
+      }
+    }
+  }
+}
+''',
+'variables': {
+    'enterpriseSlug': entreprise_slug, 
+    'afterCursor': None
+    },
+}
 
 # variables used for pagination
 hasNextPage = True
 endCursor = None
 
 while hasNextPage:
-    paginated_query = members_query
     # use endCursor for paginating queries if necessary
-    if endCursor:
-        paginated_query["query"] = paginated_query["query"].replace('null','"'+endCursor+'"')
+    members_query['variables']['afterCursor'] = endCursor
     # POST request
-    r = requests.post(url=url, json=paginated_query, headers=headers)
+    r = requests.post(url=url, json=members_query, headers=headers)
     api_data = r.json()
     # Get pagination information from the response
     endCursor = api_data["data"]["enterprise"]["members"]["pageInfo"]["endCursor"]
@@ -86,14 +89,8 @@ while hasNextPage:
         roles = [o["role"] for o in m["organizations"]["edges"]]
         organizational_roles = [':'.join([o,r]) for o, r in zip(orgs, roles)]
         members_roles["login"].append(m["user"]["login"])
-        if m["user"]["name"]:
-            members_roles["name"].append(m["user"]["name"])
-        else:
-            members_roles["name"].append(None)
-        if m["user"]["email"]:
-            members_roles["email"].append(m["user"]["email"])
-        else:
-            members_roles["email"].append(None)
+        members_roles["name"].append(m["user"]["name"])
+        members_roles["email"].append(m["user"]["email"])
         if organizational_roles:
             members_roles["organizational_roles"].append(','.join(organizational_roles))
         else:
@@ -118,52 +115,55 @@ oc_info = { "login":[],
 
 # GraphQL query for listing enterprise outside collaborators and the repositories they are members of
 # Query explanation : Using the ownerInfo object get list of outside collaborators then for each get list of repositories they are member of
-oc_query = { 'query' : f'''
-query {{
-  enterprise(slug: "{entreprise_slug}") {{
-    ownerInfo {{
-      outsideCollaborators(first:100 after: null) {{
+oc_query = {
+    'query': '''
+query ($enterpriseSlug: String!, $afterCursor: String) {
+  enterprise(slug: $enterpriseSlug) {
+    ownerInfo {
+      outsideCollaborators(first: 100, after: $afterCursor) {
         totalCount
-        edges {{
-          repositories(first:100) {{
-            nodes{{
+        edges {
+          repositories(first: 100) {
+            nodes {
               nameWithOwner
-            }}
-            edges {{
-              node{{
+            }
+            edges {
+              node {
                 isPrivate
-              }}
-            }}
-          }}
-          node {{
+              }
+            }
+          }
+          node {
             login
             name
             email
-          }}
-        }}
-        pageInfo {{
+          }
+        }
+        pageInfo {
           endCursor
           startCursor
           hasNextPage
           hasPreviousPage        
-        }}
-      }}
-    }}
-  }}
-}}
-''' }
+        }
+      }
+    }
+  }
+}
+''',
+    'variables': {
+        'enterpriseSlug': entreprise_slug,
+        'afterCursor': None,
+    },
+}
 
 # variables used for pagination
 hasNextPage = True
 endCursor = None
 
 while hasNextPage:
-    paginated_query = oc_query
-    # use endCursor for paginating queries if necessary
-    if endCursor:
-        paginated_query["query"] = paginated_query["query"].replace('null','"'+endCursor+'"')
+    oc_query['variables']['afterCursor'] = endCursor
     # POST request
-    r = requests.post(url=url, json=paginated_query, headers=headers)
+    r = requests.post(url=url, json=oc_query, headers=headers)
     api_data = r.json()
     # Get pagination information from response
     endCursor = api_data["data"]["enterprise"]["ownerInfo"]["outsideCollaborators"]["pageInfo"]["endCursor"]
@@ -176,14 +176,8 @@ while hasNextPage:
         private_repos = ','.join([repository[i] for i, x in enumerate(private) if x])
         public_repos = ','.join([repository[i] for i, x in enumerate(private) if not x])
         oc_info["login"].append(oc["node"]["login"])
-        if oc["node"]["name"]:
-            oc_info["name"].append(oc["node"]["name"])
-        else: 
-            oc_info["name"].append(None)
-        if oc["node"]["email"]:
-            oc_info["email"].append(oc["node"]["email"])
-        else:
-            oc_info["email"].append(None)
+        oc_info["name"].append(oc["node"]["name"])
+        oc_info["email"].append(oc["node"]["email"])
         if public_repos:
             oc_info['outside_collaborator_public_repos'].append(public_repos)
         else:
@@ -210,12 +204,16 @@ members_roles = members_roles.astype("string")
 # add entreprise_roles column
 oc_info['entreprise_roles'] = 'outside_collaborator'
 members_roles['entreprise_roles'] = 'member'
+# Handle unafiliated case
+members_roles.loc[members_roles['organizational_roles'].isnull(), 'entreprise_roles'] = 'unaffiliated'
 
 # Output the number of licenses already taken
-# A license is used by a member or by an outside collaborator in a private repo 
+# A license is used by a member or by an outside collaborator in a private repo
+# outside collaborators in a private repo
 private_collab = oc_info[~oc_info['outside_collaborator_private_repos'].isnull()]
+# outside collaborators with private repo that are not already members
 private_collab_not_members = private_collab[~private_collab['login'].isin(members_roles['login'])]
-print(str(members_roles.shape[0]+private_collab_not_members.shape[0]) + " licences consommées")
+print(str(members_roles[~members_roles['entreprise_roles'].str.contains('unaffiliated')].shape[0]+private_collab_not_members.shape[0]) + " licences consommées")
 
 # Split outside collaborators in two lists to deal with the case where member are also outside collaborators ...
 oc_not_member = oc_info[~oc_info['login'].isin(members_roles['login'])]
