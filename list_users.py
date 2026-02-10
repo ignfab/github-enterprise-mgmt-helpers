@@ -12,8 +12,7 @@ api_url = 'https://api.github.com/graphql'
 # GitHub API token must have read:enterprise or admin:enterprise scope and user must be enterprise owner
 api_token = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 headers = {'Authorization': 'bearer %s' % api_token}
-enterprise_slug = "your-entreprise-slug"
-"
+enterprise_slug = "your-enterprise-slug"
 
 ######################################################
 # First get list of users that are enterprise owners #
